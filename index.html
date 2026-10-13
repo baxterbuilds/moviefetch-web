@@ -186,9 +186,10 @@ function epFile(show, s, e, ext){
 "use strict";
 /* ---------- search ---------- */
 const PROXIES = [
+  u => "https://test.cors.workers.dev/?" + encodeURIComponent(u),
   u => "https://api.allorigins.win/raw?url=" + encodeURIComponent(u),
-  u => "https://api.cors.lol/?url=" + encodeURIComponent(u),
-  u => "https://test.cors.workers.dev/?" + u
+  u => "https://api.allorigins.win/get?url=" + encodeURIComponent(u),
+  u => "https://api.cors.lol/?url=" + encodeURIComponent(u)
 ];
 async function fetchJSON(url, direct){
   if(direct){
@@ -196,17 +197,25 @@ async function fetchJSON(url, direct){
     if(!r.ok) throw new Error("http "+r.status);
     return r.json();
   }
-  let err = null;
-  for(const p of PROXIES){
-    try{
-      const ctl = new AbortController(); const t = setTimeout(()=>ctl.abort(), 25000);
-      const r = await fetch(p(url), {signal: ctl.signal}); clearTimeout(t);
+  const jobs = PROXIES.map(p=>{
+    const ctl = new AbortController();
+    const t = setTimeout(()=>ctl.abort(), 15000);
+    return fetch(p(url), {signal: ctl.signal}).then(async r=>{
       const txt = await r.text();
       const t2 = txt.trim();
-      if(t2.startsWith("[") || t2.startsWith("{")) return JSON.parse(t2);
-    }catch(e){ err = e; }
-  }
-  throw err || new Error("all proxies failed");
+      let j = null;
+      if(t2.startsWith("[")){ j = JSON.parse(t2); }
+      else if(t2.startsWith("{")){
+        const w = JSON.parse(t2);
+        if(w.contents){ const c = String(w.contents).trim(); if(c.startsWith("[")) j = JSON.parse(c); }
+        else j = w;
+      }
+      if(j) return j;
+      throw new Error("bad response");
+    }).finally(()=>clearTimeout(t));
+  });
+  try{ return await Promise.any(jobs); }
+  catch(e){ throw new Error("torrent index unreachable"); }
 }
 function qualityOf(name){
   const n = String(name||"");
@@ -296,7 +305,7 @@ function renderResults(b, sections, box){
   const tsec = sections[0], isec = sections[1];
   let html = "";
   const titems = (!tsec.error ? tsec.items : []);
-  if(tsec.error) html += '<div class="card"><div class="err">Torrent search failed: '+esc(tsec.error)+'. Free sources below may still work.</div></div>';
+  if(tsec.error) html += '<div class="card"><div class="err">Torrent search failed: '+esc(tsec.error)+'. Free sources below may still work.</div><div style="margin-top:8px"><button class="ghost" onclick="doSearch()">Try again</button></div></div>';
   lastResults = [];
   titems.forEach((it, i)=>{
     lastResults.push({kind:"torrent", t:it.t});
