@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0d1117">
+<title>MovieFetch Web</title>
+<style>
+  :root{ --bg:#0d1117; --panel:#161b22; --line:#2d333b; --txt:#e6edf3; --dim:#8b949e;
+        --acc:#2f81f7; --good:#3fb950; --warn:#d29922; --bad:#f85149; }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body{ margin:0; background:var(--bg); color:var(--txt);
+        font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+        padding-bottom:86px; }
+  header{ position:sticky; top:0; z-index:10; background:var(--bg);
+          border-bottom:1px solid var(--line); padding:12px 16px; }
+  header h1{ margin:0; font-size:19px; }
+  header p{ margin:2px 0 0; font-size:12px; color:var(--dim); }
+  main{ padding:12px 12px 0; max-width:720px; margin:0 auto; }
+  .tabpage{ display:none; } .tabpage.on{ display:block; }
+  nav.tabs{ position:fixed; left:0; right:0; bottom:0; z-index:10;
+            display:flex; background:var(--panel); border-top:1px solid var(--line);
+            padding-bottom:env(safe-area-inset-bottom); }
+  nav.tabs button{ flex:1; background:none; border:0; color:var(--dim);
+                   font-size:12px; padding:12px 4px 10px; }
+  nav.tabs button.on{ color:var(--acc); font-weight:600; }
+  .card{ background:var(--panel); border:1px solid var(--line); border-radius:10px;
+         padding:12px; margin-bottom:10px; }
+  .row{ display:flex; gap:8px; align-items:center; }
+  label{ font-size:12px; color:var(--dim); display:block; margin:8px 0 4px; }
+  input[type=text],input[type=number],select{
+    width:100%; background:var(--bg); color:var(--txt); border:1px solid var(--line);
+    border-radius:8px; padding:10px; font-size:16px; }
+  .two{ display:flex; gap:8px; } .two>div{ flex:1; }
+  button.big{ width:100%; background:var(--acc); color:#fff; border:0; border-radius:8px;
+              padding:12px; font-size:16px; font-weight:600; margin-top:10px; }
+  button.big:disabled{ opacity:.5; }
+  button.ghost{ background:none; border:1px solid var(--line); color:var(--txt);
+                border-radius:8px; padding:8px 12px; font-size:14px; }
+  button.dl{ background:var(--good); color:#04140a; border:0; border-radius:8px;
+             padding:8px 14px; font-size:14px; font-weight:700; white-space:nowrap; }
+  .pick{ border:1px solid var(--good); }
+  .badge{ display:inline-block; font-size:11px; font-weight:700; border-radius:20px;
+          padding:2px 8px; margin-left:6px; vertical-align:middle; }
+  .badge.pick{ background:var(--good); color:#04140a; }
+  .badge.q{ background:var(--line); color:var(--txt); }
+  .badge.src{ background:#1f3b63; color:#bfe0ff; }
+  .meta{ font-size:12px; color:var(--dim); margin-top:6px; }
+  .rname{ font-size:14px; word-break:break-word; }
+  .bar{ height:8px; background:var(--line); border-radius:4px; overflow:hidden; margin-top:8px; }
+  .bar>i{ display:block; height:100%; background:var(--acc); width:0%; }
+  .status{ font-size:12px; color:var(--dim); margin-top:6px; }
+  .err{ color:var(--bad); font-size:13px; margin-top:8px; }
+  .note{ font-size:12px; color:var(--dim); line-height:1.5; }
+  .switchrow{ display:flex; justify-content:space-between; align-items:center; padding:8px 0; }
+  .switch{ position:relative; width:52px; height:30px; flex:none; }
+  .switch input{ opacity:0; width:100%; height:100%; margin:0; position:absolute; z-index:2; }
+  .track{ position:absolute; inset:0; background:var(--line); border-radius:15px; transition:.2s; }
+  .knob{ position:absolute; top:3px; left:3px; width:24px; height:24px; border-radius:50%;
+         background:#fff; transition:.2s; }
+  .switch input:checked ~ .track{ background:var(--good); }
+  .switch input:checked ~ .knob{ left:25px; }
+  .spinner{ display:inline-block; width:14px; height:14px; border:2px solid var(--line);
+            border-top-color:var(--acc); border-radius:50%; animation:sp 1s linear infinite;
+            vertical-align:-2px; margin-right:6px; }
+  @keyframes sp{ to{ transform:rotate(360deg); } }
+  h2{ font-size:16px; margin:4px 0 10px; }
+  .empty{ text-align:center; color:var(--dim); padding:30px 10px; font-size:14px; }
+  .x{ background:none; border:0; color:var(--dim); font-size:18px; padding:4px 8px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>MovieFetch Web</h1>
+  <p>Search, pick the best release, download. Made for Aloha.</p>
+</header>
+<main>
+  <section id="tab-search" class="tabpage on">
+    <div class="card">
+      <label for="q">Movie or show name</label>
+      <input type="text" id="q" placeholder="e.g. The Santa Clause 3" autocomplete="off">
+      <div class="two" style="margin-top:8px">
+        <div>
+          <label for="kind">Type</label>
+          <select id="kind"><option value="movie">Movie</option><option value="show">TV show</option></select>
+        </div>
+        <div>
+          <label for="year">Year (optional)</label>
+          <input type="number" id="year" placeholder="2024" min="1900" max="2100">
+        </div>
+      </div>
+      <div class="two" id="epfields" style="display:none">
+        <div><label for="season">Season</label><input type="number" id="season" min="1" value="1"></div>
+        <div><label for="episode">Episode (blank = whole season)</label><input type="number" id="episode" min="1" placeholder="—"></div>
+      </div>
+      <button class="big" id="gobtn" onclick="doSearch()">Search</button>
+    </div>
+    <div id="results"></div>
+  </section>
+
+  <section id="tab-downloads" class="tabpage">
+    <h2>Downloads</h2>
+    <div id="dls"></div>
+  </section>
+
+  <section id="tab-watch" class="tabpage">
+    <h2>Watchlist</h2>
+    <div class="card">
+      <div class="row">
+        <input type="text" id="wadd" placeholder="Show name" style="flex:1" autocomplete="off">
+        <button class="ghost" onclick="watchAdd()">Add</button>
+      </div>
+      <div id="wsearch"></div>
+    </div>
+    <div id="wlist"></div>
+  </section>
+
+  <section id="tab-settings" class="tabpage">
+    <h2>Settings</h2>
+    <div class="card">
+      <label for="setq">Preferred quality</label>
+      <select id="setq">
+        <option value="480p">480p (smallest)</option>
+        <option value="720p">720p</option>
+        <option value="1080p">1080p (biggest)</option>
+      </select>
+      <div class="switchrow"><span>Prefer MP4 files (play anywhere)</span>
+        <span class="switch"><input type="checkbox" id="setmp4" onchange="saveSettings()"><span class="track"></span><span class="knob"></span></span></div>
+      <div class="switchrow"><span>Keep downloading in background (silent audio)</span>
+        <span class="switch"><input type="checkbox" id="setbg" onchange="saveSettings();setBgAudio(this.checked)"><span class="track"></span><span class="knob"></span></span></div>
+    </div>
+    <div class="card">
+      <h2>Good to know</h2>
+      <p class="note">
+      Torrent downloads only reach people whose apps can talk to browsers, so
+      less common files may be slow or stall. Free sources (Internet Archive and
+      similar) download straight and fast.<br><br>
+      Keep Aloha open while downloading. The background switch plays silence so
+      iOS is less likely to pause the page, but iOS can still stop it — it is
+      not a guarantee.<br><br>
+      Very large files can run out of memory on iPhone. 720p is the safest pick
+      for movies.</p>
+    </div>
+  </section>
+</main>
+<nav class="tabs">
+  <button class="on" onclick="tab('search',this)">Search</button>
+  <button onclick="tab('downloads',this)">Downloads</button>
+  <button onclick="tab('watch',this)">Watchlist</button>
+  <button onclick="tab('settings',this)">Settings</button>
+</nav>
+<script src="https://cdn.jsdelivr.net/npm/webtorrent@2.8.5/dist/webtorrent.min.js"></script>
+<script>
+"use strict";
+/* ---------- state ---------- */
+function loadS(){ try{ return JSON.parse(localStorage.getItem("mfw1"))||{} }catch(e){ return {} } }
+function saveS(){ try{ localStorage.setItem("mfw1", JSON.stringify(S)) }catch(e){} }
+let S = Object.assign({ settings:{quality:"720p", preferMp4:true, bgAudio:false},
+                        watchlist:[], history:[], lastCheck:{} }, loadS());
+if(!S.settings) S.settings = {quality:"720p", preferMp4:true, bgAudio:false};
+
+function tab(name, btn){
+  document.querySelectorAll(".tabpage").forEach(e=>e.classList.remove("on"));
+  document.getElementById("tab-"+name).classList.add("on");
+  document.querySelectorAll("nav.tabs button").forEach(b=>b.classList.remove("on"));
+  btn.classList.add("on");
+  if(name==="downloads") renderDls();
+  if(name==="watch") renderWatch();
+}
+document.getElementById("kind").addEventListener("change", function(){
+  document.getElementById("epfields").style.display = this.value==="show" ? "flex" : "none";
+});
+function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function cleanName(s){ return String(s||"").replace(/[\/\\:*?"<>|]/g,"").trim().slice(0,120) || "download"; }
+function pad(n,w){ n=String(n); while(n.length<w) n="0"+n; return n; }
+function fmtSize(b){ b=+b||0; if(b<=0) return "?"; const u=["B","KB","MB","GB","TB"]; let i=0;
+  while(b>=1024&&i<u.length-1){ b/=1024; i++; } return b.toFixed(b>=100||i===0?0:1)+" "+u[i]; }
+function fmtSpeed(b){ return fmtSize(b)+"/s"; }
+function movieFile(title, year, ext){ return cleanName(title+(year?" ["+year+"]":""))+"."+ext; }
+function epFile(show, s, e, ext){
+  const sd = s>=10?2:1;
+  return cleanName("S"+pad(s,sd)+"E"+pad(e,2)+" "+show)+"."+ext;
+}
+</script>
+<script>
+"use strict";
+/* ---------- search ---------- */
+const PROXIES = [
+  u => "https://api.allorigins.win/raw?url=" + encodeURIComponent(u),
+  u => "https://api.cors.lol/?url=" + encodeURIComponent(u),
+  u => "https://test.cors.workers.dev/?" + u
+];
+async function fetchJSON(url, direct){
+  if(direct){
+    const r = await fetch(url);
+    if(!r.ok) throw new Error("http "+r.status);
+    return r.json();
+  }
+  let err = null;
+  for(const p of PROXIES){
+    try{
+      const ctl = new AbortController(); const t = setTimeout(()=>ctl.abort(), 25000);
+      const r = await fetch(p(url), {signal: ctl.signal}); clearTimeout(t);
+      const txt = await r.text();
+      const t2 = txt.trim();
+      if(t2.startsWith("[") || t2.startsWith("{")) return JSON.parse(t2);
+    }catch(e){ err = e; }
+  }
+  throw err || new Error("all proxies failed");
+}
+function qualityOf(name){
+  const n = String(name||"");
+  if(/2160p|4k|uhd/i.test(n)) return "2160p";
+  if(/1080p/i.test(n)) return "1080p";
+  if(/720p/i.test(n)) return "720p";
+  if(/480p|hdtv|dvdrip|webrip/i.test(n)) return "480p";
+  return "unknown";
+}
+function extOf(name){ const m = /\.([a-z0-9]{2,4})$/i.exec(String(name||"")); return m?m[1].toLowerCase():"mp4"; }
+const TRUSTED = ["yts","ettv","eztv","rarbg","tgx","qxr"];
+const QORDER = ["480p","720p","1080p","2160p"];
+function sizeRange(q, isEp){
+  const gb = 1024*1024*1024;
+  const m = { "480p":[0.3*gb,1.2*gb], "720p":[0.6*gb,3*gb], "1080p":[1.2*gb,6*gb], "2160p":[3*gb,15*gb] }[q] || [0.3*gb,6*gb];
+  return isEp ? [m[0]/3, m[1]/2] : m;
+}
+function scoreTorrent(t, isEp){
+  let s = 0;
+  const seeders = parseInt(t.seeders||"0",10)||0;
+  s += Math.min(seeders, 500)*0.4;
+  const q = qualityOf(t.name);
+  if(q === S.settings.quality) s += 120;
+  else if(q !== "unknown"){
+    const d = Math.abs(QORDER.indexOf(q) - QORDER.indexOf(S.settings.quality));
+    s += Math.max(0, 40 - d*20);
+  }
+  const un = String(t.username||"").toLowerCase();
+  if(TRUSTED.some(x=>un.indexOf(x)>=0)) s += 60;
+  const size = parseInt(t.size||"0",10)||0;
+  const r = sizeRange(S.settings.quality, isEp);
+  if(size>0){ s += (size>=r[0]&&size<=r[1]) ? 40 : -30; }
+  if(S.settings.preferMp4 && /\.mp4($|\s)/i.test(t.name)) s += 25;
+  if(/\bcam\b|telesync|\bhdcam\b/i.test(t.name)) s -= 80;
+  if(seeders < 3) s -= 25;
+  return s;
+}
+function buildQuery(){
+  const title = document.getElementById("q").value.trim();
+  const kind = document.getElementById("kind").value;
+  const year = document.getElementById("year").value.trim();
+  let q = title + (year ? " "+year : "");
+  let isEp = false, season = 0, episode = 0;
+  if(kind === "show"){
+    season = parseInt(document.getElementById("season").value||"1",10)||1;
+    const epv = document.getElementById("episode").value.trim();
+    if(epv){ episode = parseInt(epv,10)||0; q += " S"+pad(season, season>=10?2:1)+"E"+pad(episode,2); isEp = true; }
+    else { q += " S"+pad(season, season>=10?2:1); }
+  }
+  return { title, kind, year, season, episode, isEp, q };
+}
+let lastResults = [];
+async function doSearch(){
+  const b = buildQuery();
+  if(!b.title){ return; }
+  const box = document.getElementById("results");
+  box.innerHTML = '<div class="card"><span class="spinner"></span>Searching…</div>';
+  document.getElementById("gobtn").disabled = true;
+  lastResults = [];
+  const jobs = [tpbSearch(b), iaSearch(b)];
+  const sections = await Promise.all(jobs.map(j=>j.catch(e=>({error:String(e&&e.message||e)}))));
+  document.getElementById("gobtn").disabled = false;
+  renderResults(b, sections, box);
+}
+async function tpbSearch(b){
+  const data = await fetchJSON("https://apibay.org/q.php?q="+encodeURIComponent(b.q), false);
+  const items = (Array.isArray(data)?data:[]).filter(t=>t && t.info_hash && /^[0-9a-f]{40}$/i.test(t.info_hash));
+  const scored = items.map(t=>({ t, score: scoreTorrent(t, b.isEp||b.kind==="show") }));
+  scored.sort((a,c)=>c.score-a.score);
+  return { kind:"torrent", items: scored.slice(0, 40) };
+}
+async function iaSearch(b){
+  const qq = "mediatype:movies AND title:("+b.q.replace(/[":]/g," ")+")";
+  const url = "https://archive.org/advancedsearch.php?q="+encodeURIComponent(qq)+
+              "&fl[]=identifier&fl[]=title&fl[]=downloads&rows=25&output=json";
+  const data = await fetchJSON(url, true);
+  const docs = (data.response && data.response.docs) || [];
+  return { kind:"ia", items: docs.map(d=>({ id:d.identifier, title:d.title, downloads:d.downloads||0 })) };
+}
+function magnet(t){
+  const tr = ["udp://tracker.openbittorrent.com:80","udp://tracker.opentrackr.org:1337/announce",
+              "udp://exodus.desync.com:6969/announce","wss://tracker.webtorrent.io"]
+             .map(x=>"&tr="+encodeURIComponent(x)).join("");
+  return "magnet:?xt=urn:btih:"+t.info_hash+"&dn="+encodeURIComponent(t.name)+tr;
+}
+function renderResults(b, sections, box){
+  const tsec = sections[0], isec = sections[1];
+  let html = "";
+  const titems = (!tsec.error ? tsec.items : []);
+  if(tsec.error) html += '<div class="card"><div class="err">Torrent search failed: '+esc(tsec.error)+'. Free sources below may still work.</div></div>';
+  lastResults = [];
+  titems.forEach((it, i)=>{
+    lastResults.push({kind:"torrent", t:it.t});
+    const idx = lastResults.length-1;
+    html += '<div class="card'+(i===0?' pick':'')+'"><span class="rname">'+esc(it.t.name)+'</span>'+
+      (i===0?'<span class="badge pick">SMART PICK</span>':'')+
+      '<span class="badge q">'+esc(qualityOf(it.t.name))+'</span><span class="badge src">torrent</span>'+
+      '<div class="meta">'+fmtSize(it.t.size)+' · '+esc(it.t.seeders)+' seeders'+
+      (it.t.username?' · '+esc(it.t.username):'')+'</div>'+
+      '<div style="margin-top:8px"><button class="dl" onclick="dlTorrentIdx('+idx+')">Download</button></div></div>';
+  });
+  const iitems = (!isec.error ? isec.items : []);
+  if(isec.error) html += '<div class="card"><div class="err">Archive.org search failed: '+esc(isec.error)+'</div></div>';
+  iitems.forEach(d=>{
+    lastResults.push({kind:"ia", id:d.id, title:d.title});
+    const idx = lastResults.length-1;
+    html += '<div class="card"><span class="rname">'+esc(d.title)+'</span>'+
+      '<span class="badge src">archive.org</span>'+
+      '<div class="meta">'+esc(d.downloads)+' downloads</div>'+
+      '<div style="margin-top:8px"><button class="dl" onclick="dlIaIdx('+idx+')">Download</button></div></div>';
+  });
+  if(!html) html = '<div class="empty">No results. Try fewer words.</div>';
+  box.innerHTML = html;
+  window._b = b;
+}
+function dlTorrentIdx(i){ const r = lastResults[i]; if(r) startTorrentDl(r.t); }
+async function dlIaIdx(i){
+  const r = lastResults[i]; if(!r) return;
+  const b = window._b || {};
+  setIaBusy(i, true);
+  try{
+    const m = await (await fetch("https://archive.org/metadata/"+encodeURIComponent(r.id))).json();
+    const files = (m.files||[]).filter(f=>/\.(mp4|mkv|avi|ogv|webm|m4v)$/i.test(f.name||""));
+    if(!files.length) throw new Error("no video files found");
+    files.sort((a,c)=>{
+      const ap = /\.mp4$/i.test(a.name)?0:1, cp = /\.mp4$/i.test(c.name)?0:1;
+      if(S.settings.preferMp4 && ap!==cp) return ap-cp;
+      return (parseInt(c.size||0)-parseInt(a.size||0));
+    });
+    const f = files[0];
+    const url = "https://archive.org/download/"+encodeURIComponent(r.id)+"/"+encodeURIComponent(f.name).replace(/%2F/g,"/");
+    const ext = extOf(f.name);
+    const fname = b.kind==="show"
+      ? epFile(b.title||r.title, b.season||1, b.episode||1, ext)
+      : movieFile(b.title||r.title, b.year||"", ext);
+    enqueue({kind:"http", url, name:fname, size:parseInt(f.size||0,10), status:"queued", progress:0});
+    tab("downloads", document.querySelectorAll("nav.tabs button")[1]);
+  }catch(e){ alert("Could not get the file: "+(e.message||e)); }
+  setIaBusy(i, false);
+}
+function setIaBusy(i, on){
+  const box = document.getElementById("results");
+  if(on && box) box.insertAdjacentHTML("afterbegin", "");
+}
+</script>
+<script>
+"use strict";
+/* ---------- downloads ---------- */
+let dlQueue = [];
+let activeTorrentDl = null, activeHttp = 0, wtClient = null, wtLoading = null;
+
+function enqueue(d){
+  d.id = "d"+Date.now()+Math.floor(Math.random()*1e6);
+  d.addedAt = Date.now();
+  dlQueue.unshift(d);
+  saveHistory();
+  pump();
+  renderDls();
+}
+function pump(){
+  if(!activeTorrentDl){
+    const t = dlQueue.find(d=>d.kind==="torrent" && d.status==="queued");
+    if(t) startTorrent(t);
+  }
+  while(activeHttp < 3){
+    const h = dlQueue.find(d=>d.kind==="http" && d.status==="queued");
+    if(!h) break;
+    startHttp(h);
+  }
+}
+function wtReady(){
+  if(wtClient) return Promise.resolve(wtClient);
+  if(wtLoading) return wtLoading;
+  wtLoading = new Promise((res, rej)=>{
+    if(typeof WebTorrent !== "undefined"){ wtClient = new WebTorrent(); return res(wtClient); }
+    const s = document.createElement("script");
+    s.src = "https://unpkg.com/webtorrent@2.8.5/dist/webtorrent.min.js";
+    s.onload = ()=>{ try{ wtClient = new WebTorrent(); res(wtClient); }catch(e){ rej(e); } };
+    s.onerror = ()=>rej(new Error("torrent engine failed to load"));
+    document.head.appendChild(s);
+  });
+  return wtLoading;
+}
+async function startTorrentDl(t){
+  const b = window._b || {};
+  const ext = extOf(t.name);
+  const fname = b.kind==="show"
+    ? epFile(b.title||t.name, b.season||1, b.episode||1, ext)
+    : movieFile((b.title||t.name).split(/[\.\-_]/).join(" ").slice(0,60), b.year||"", ext);
+  enqueue({kind:"torrent", t, name:fname, magnet:magnet(t), status:"queued", progress:0,
+           size:parseInt(t.size||"0",10)||0});
+  tab("downloads", document.querySelectorAll("nav.tabs button")[1]);
+}
+async function startTorrent(d){
+  d.status = "starting"; activeTorrentDl = d; renderDls();
+  try{
+    const client = await wtReady();
+    if(d.status === "cancelled"){ activeTorrentDl = null; pump(); return; }
+    d.status = "downloading"; renderDls();
+    client.add(d.magnet, function(tor){
+      d.tor = tor;
+      tor.on("download", ()=>{
+        d.progress = tor.progress; d.speed = tor.downloadSpeed; d.peers = tor.numPeers;
+        renderDls();
+      });
+      tor.on("done", ()=>{
+        d.progress = 1; d.status = "finishing"; renderDls();
+        const vids = tor.files.filter(f=>/\.(mp4|mkv|avi|ogv|webm|m4v)$/i.test(f.name));
+        vids.sort((a,c)=>c.length-a.length);
+        const f = vids[0] || tor.files.sort((a,c)=>c.length-a.length)[0];
+        if(!f){ d.status="error"; d.error="no files in torrent"; activeTorrentDl=null; pump(); renderDls(); return; }
+        if(f.length > 1.5*1024*1024*1024) d.bigWarn = true;
+        f.getBlob(function(err, blob){
+          if(err || !blob){ d.status="error"; d.error="could not read file"; }
+          else{
+            d.blobUrl = URL.createObjectURL(blob);
+            d.status = "done"; d.size = f.length;
+            pushHistory(d);
+          }
+          activeTorrentDl = null; pump(); renderDls();
+          if(d.status==="done") autoSave(d);
+        });
+      });
+      tor.on("error", function(e){
+        d.status="error"; d.error=String((e&&e.message)||e);
+        activeTorrentDl=null; pump(); renderDls();
+      });
+    });
+  }catch(e){
+    d.status="error"; d.error=String((e&&e.message)||e);
+    activeTorrentDl=null; pump(); renderDls();
+  }
+}
+async function startHttp(d){
+  d.status = "downloading"; activeHttp++; renderDls();
+  d.abort = new AbortController();
+  try{
+    const r = await fetch(d.url, {signal:d.abort.signal});
+    if(!r.ok) throw new Error("http "+r.status);
+    const total = parseInt(r.headers.get("content-length")||d.size||"0",10)||0;
+    const reader = r.body.getReader();
+    const parts = []; let got = 0;
+    for(;;){
+      const {done, value} = await reader.read();
+      if(done) break;
+      parts.push(value); got += value.length;
+      d.progress = total? got/total : 0; d.speed = 0; renderDls();
+    }
+    const blob = new Blob(parts);
+    d.blobUrl = URL.createObjectURL(blob);
+    d.status = "done"; d.size = got;
+    pushHistory(d);
+    autoSave(d);
+  }catch(e){
+    if(d.status!=="cancelled"){ d.status="error"; d.error=String((e&&e.message)||e); }
+  }
+  activeHttp--; pump(); renderDls();
+}
+function autoSave(d){
+  if(!d.blobUrl) return;
+  const a = document.createElement("a");
+  a.href = d.blobUrl; a.download = d.name;
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>a.remove(), 4000);
+}
+function cancelDl(id){
+  const d = dlQueue.find(x=>x.id===id); if(!d) return;
+  d.status = "cancelled";
+  if(d.tor){ try{ d.tor.destroy(); }catch(e){} }
+  if(d.abort){ try{ d.abort.abort(); }catch(e){} }
+  if(activeTorrentDl===d) activeTorrentDl = null;
+  renderDls(); pump();
+}
+function removeDl(id){
+  const i = dlQueue.findIndex(x=>x.id===id); if(i<0) return;
+  const d = dlQueue[i];
+  if(d.status==="downloading"||d.status==="starting"||d.status==="finishing"){ cancelDl(id); return; }
+  if(d.blobUrl) try{ URL.revokeObjectURL(d.blobUrl); }catch(e){}
+  dlQueue.splice(i,1); renderDls();
+}
+function pushHistory(d){
+  S.history.unshift({name:d.name, size:d.size||0, at:Date.now(), kind:d.kind});
+  S.history = S.history.slice(0,50); saveS(); saveHistory();
+}
+function saveHistory(){}
+function statusText(d){
+  if(d.status==="queued") return "Waiting…";
+  if(d.status==="starting") return "Starting…";
+  if(d.status==="downloading"){
+    const p = Math.floor((d.progress||0)*100);
+    let s = p+"%";
+    if(d.speed) s += " · "+fmtSpeed(d.speed);
+    if(d.peers!=null) s += " · "+d.peers+" peers";
+    return s;
+  }
+  if(d.status==="finishing") return "Finishing…";
+  if(d.status==="done") return "Done";
+  if(d.status==="cancelled") return "Cancelled";
+  if(d.status==="error") return "Failed: "+(d.error||"unknown");
+  return d.status;
+}
+function renderDls(){
+  const box = document.getElementById("dls");
+  if(!dlQueue.length){ box.innerHTML = '<div class="empty">Nothing downloading yet.</div>'; return; }
+  box.innerHTML = dlQueue.map(d=>{
+    const pct = Math.floor((d.progress||0)*100);
+    let btns = "";
+    if(d.status==="done" && d.blobUrl)
+      btns += '<a class="dl" style="text-decoration:none;display:inline-block" href="'+d.blobUrl+'" download="'+esc(d.name)+'">Save again</a> ';
+    if(["queued","starting","downloading","finishing"].indexOf(d.status)>=0)
+      btns += '<button class="ghost" onclick="cancelDl(\''+d.id+'\')">Cancel</button> ';
+    else
+      btns += '<button class="ghost" onclick="removeDl(\''+d.id+'\')">Remove</button>';
+    return '<div class="card"><div class="row"><span class="rname" style="flex:1">'+esc(d.name)+
+      '</span><button class="x" onclick="removeDl(\''+d.id+'\')">×</button></div>'+
+      '<div class="meta">'+esc(d.kind==="torrent"?"torrent":"direct")+' · '+fmtSize(d.size)+'</div>'+
+      (d.bigWarn?'<div class="err">Large file — big downloads can fail on iPhone if memory runs out.</div>':"")+
+      '<div class="bar"><i style="width:'+pct+'%"></i></div>'+
+      '<div class="status">'+esc(statusText(d))+'</div>'+
+      (d.status==="done"?'<div class="note" style="margin-top:6px">Saved via Aloha\u2019s download manager. Check Aloha\u2019s Files.</div>':"")+
+      '<div style="margin-top:8px">'+btns+'</div></div>';
+  }).join("");
+}
+</script>
+<script>
+"use strict";
+/* ---------- background audio keep-alive ---------- */
+let actx = null, osc = null;
+function setBgAudio(on){
+  S.settings.bgAudio = !!on; saveS();
+  try{
+    if(on){
+      if(!actx) actx = new (window.AudioContext||window.webkitAudioContext)();
+      if(actx.state === "suspended") actx.resume();
+      if(!osc){
+        osc = actx.createOscillator();
+        const g = actx.createGain(); g.gain.value = 0;
+        osc.connect(g); g.connect(actx.destination); osc.start();
+      }
+    }else if(osc){ try{osc.stop();}catch(e){} osc = null; }
+  }catch(e){}
+}
+document.addEventListener("visibilitychange", function(){
+  if(!document.hidden && S.settings.bgAudio && actx && actx.state==="suspended") actx.resume();
+});
+/* ---------- settings ---------- */
+function loadSettings(){
+  document.getElementById("setq").value = S.settings.quality || "720p";
+  document.getElementById("setmp4").checked = !!S.settings.preferMp4;
+  document.getElementById("setbg").checked = !!S.settings.bgAudio;
+}
+function saveSettings(){
+  S.settings.quality = document.getElementById("setq").value;
+  S.settings.preferMp4 = document.getElementById("setmp4").checked;
+  saveS();
+}
+/* ---------- watchlist ---------- */
+async function watchAdd(){
+  const q = document.getElementById("wadd").value.trim();
+  if(!q) return;
+  const box = document.getElementById("wsearch");
+  box.innerHTML = '<div class="note"><span class="spinner"></span>Looking…</div>';
+  try{
+    const shows = await (await fetch("https://api.tvmaze.com/search/shows?q="+encodeURIComponent(q))).json();
+    if(!shows.length){ box.innerHTML = '<div class="note">No shows found.</div>'; return; }
+    box.innerHTML = shows.slice(0,5).map(s=>
+      '<div class="card"><div class="row"><span class="rname" style="flex:1">'+esc(s.show.name)+
+      (s.show.premiered?' <span class="meta">'+esc(s.show.premiered.slice(0,4))+'</span>':'')+
+      '</span><button class="ghost" onclick="watchAddId('+s.show.id+',\''+esc(s.show.name).replace(/'/g,"\\'")+'\')">Add</button></div></div>'
+    ).join("");
+  }catch(e){ box.innerHTML = '<div class="err">Search failed. Check connection.</div>'; }
+}
+function watchAddId(id, name){
+  if(!S.watchlist.some(w=>w.id===id)) S.watchlist.push({id, name});
+  S.lastCheck[id] = new Date().toISOString().slice(0,10);
+  saveS(); document.getElementById("wadd").value = ""; document.getElementById("wsearch").innerHTML = "";
+  renderWatch();
+}
+function watchRemove(id){
+  S.watchlist = S.watchlist.filter(w=>w.id!==id);
+  delete S.lastCheck[id]; saveS(); renderWatch();
+}
+function renderWatch(){
+  const box = document.getElementById("wlist");
+  if(!S.watchlist.length){ box.innerHTML = '<div class="empty">No shows yet. Add one above.</div>'; return; }
+  box.innerHTML = S.watchlist.map(w=>
+    '<div class="card"><div class="row"><span class="rname" style="flex:1">'+esc(w.name)+'</span>'+
+    '<button class="ghost" onclick="watchFind('+w.id+',\''+esc(w.name).replace(/'/g,"\\'")+'\')">Find episodes</button> '+
+    '<button class="x" onclick="watchRemove('+w.id+')">×</button></div>'+
+    (w.newCount?'<div class="meta" style="color:var(--good)">'+w.newCount+' new episode(s) since last check</div>':"")+
+    '</div>'
+  ).join("");
+}
+function watchFind(id, name){
+  document.getElementById("q").value = name;
+  document.getElementById("kind").value = "show";
+  document.getElementById("kind").dispatchEvent(new Event("change"));
+  tab("search", document.querySelectorAll("nav.tabs button")[0]);
+  doSearch();
+}
+async function checkWatchlist(){
+  const today = new Date().toISOString().slice(0,10);
+  for(const w of S.watchlist){
+    try{
+      const eps = await (await fetch("https://api.tvmaze.com/shows/"+w.id+"/episodes")).json();
+      const last = S.lastCheck[w.id] || "2000-01-01";
+      const fresh = eps.filter(e=>e.airdate && e.airdate > last && e.airdate <= today);
+      w.newCount = fresh.length || 0;
+      const aired = eps.filter(e=>e.airdate && e.airdate <= today).sort((a,b)=>a.airdate<b.airdate?1:-1);
+      if(aired.length){ w.season = aired[0].season; w.episode = aired[0].number; }
+    }catch(e){ w.newCount = 0; }
+  }
+  S.lastCheckAll = today; saveS(); renderWatch();
+}
+/* ---------- history ---------- */
+function renderHistory(){}
+/* ---------- init ---------- */
+loadSettings();
+renderWatch();
+if(S.settings.bgAudio){ /* needs a tap to start audio; switch state restored */ }
+const lastAll = S.lastCheckAll;
+const today0 = new Date().toISOString().slice(0,10);
+if(S.watchlist.length && lastAll !== today0){ checkWatchlist(); }
+</script>
+</body>
+</html>
