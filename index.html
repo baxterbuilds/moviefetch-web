@@ -100,6 +100,14 @@
 
   <section id="tab-downloads" class="tabpage">
     <h2>Downloads</h2>
+    <div class="card">
+      <label for="magin">Have a magnet link? Paste it here.</label>
+      <div class="row">
+        <input type="text" id="magin" placeholder="magnet:?xt=urn:btih:…" style="flex:1" autocomplete="off">
+        <button class="dl" onclick="pasteMagnet()">Download</button>
+      </div>
+      <p class="note" style="margin:8px 0 0">Find a torrent in Aloha, copy its magnet link, paste it here — the page downloads it directly, no search needed.</p>
+    </div>
     <div id="dls"></div>
   </section>
 
@@ -332,6 +340,16 @@ function renderResults(b, sections, box){
   window._b = b;
 }
 function dlTorrentIdx(i){ const r = lastResults[i]; if(r) startTorrentDl(r.t); }
+function pasteMagnet(){
+  const m = document.getElementById("magin").value.trim();
+  if(!/^magnet:\?xt=urn:btih:[0-9a-f]{40}/i.test(m)){ alert("That doesn't look like a magnet link."); return; }
+  const dn = (/[?&]dn=([^&]+)/.exec(m)||[])[1];
+  const raw = dn ? decodeURIComponent(dn.replace(/\+/g," ")) : "download";
+  const title = raw.split(/[\.\-_]/).join(" ").replace(/\s+/g," ").trim().slice(0,60) || "download";
+  enqueue({kind:"torrent", t:{name:raw, size:"0", seeders:"?"}, name:movieFile(title,"",extOf(raw)),
+           magnet:m, status:"queued", progress:0, size:0});
+  document.getElementById("magin").value = "";
+}
 async function dlIaIdx(i){
   const r = lastResults[i]; if(!r) return;
   const b = window._b || {};
